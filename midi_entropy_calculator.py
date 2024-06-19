@@ -2,11 +2,11 @@ import mido
 import numpy as np
 from scipy.stats import entropy
 
-class EntropyCalculator:
+class MidiEntropyCalculator:
     def __init__(self):
         pass
 
-    def calculate_entropy_with_window(self, midi_file_path, window_size=5.0, bin_size=0.1):
+    def calculate_midi_entropy_with_window(self, midi_file_path, window_size=5.0, bin_size=0.1):
         midi_file = mido.MidiFile(midi_file_path)
 
         # Initialize variables

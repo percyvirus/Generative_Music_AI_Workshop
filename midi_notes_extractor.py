@@ -1,11 +1,11 @@
 import mido
 import numpy as np
 
-class NotesExtractor:
+class MidiNotesExtractor:
     def __init__(self):
         pass
 
-    def extract_notes(self, midi_file_path, channel=0):
+    def extract_midi_notes(self, midi_file_path, channel=0):
         self.midi_file = mido.MidiFile(midi_file_path, clip=True)
         pitches = []
         durations = []
