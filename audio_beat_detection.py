@@ -1,6 +1,6 @@
 import essentia.standard as estd
 
-class BeatDetection():
+class AudioBeatDetection():
     
     def __init__(self):
         pass

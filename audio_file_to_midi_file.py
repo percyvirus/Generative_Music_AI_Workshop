@@ -44,17 +44,25 @@ class AudioFileToMidiFile():
         mid.tracks.append(track)
 
         # Filter out NaN values from notes, onsets, durations, and silence_durations
-        valid_indices = ~np.isnan(notes)
+        valid_indices = ~np.isnan(notes) & ~np.isinf(notes)
         filtered_notes = notes[valid_indices]
         filtered_onsets = onsets[valid_indices]
         filtered_durations = durations[valid_indices]
         filtered_silence_durations = np.array(silence_durations)[valid_indices]
 
-        for note, onset, duration, silence_duration in zip(list(notes), list(onsets), list(durations), silence_durations):
+        for note, onset, duration, silence_duration in zip(filtered_notes, filtered_onsets, filtered_durations, filtered_silence_durations):
+            track.append(mido.Message('note_on', note=int(note), velocity=64,
+                                      time=int(mido.second2tick(onset, PPQ, tempo))))
+            track.append(mido.Message('note_off', note=int(note),
+                                      time=int(mido.second2tick(duration, PPQ, tempo))))
+
+        return pitch_values, pitch_confidence, pitch_times, track
+        
+        """for note, onset, duration, silence_duration in zip(list(notes), list(onsets), list(durations), silence_durations):
             track.append(mido.Message('note_on', note=int(note), velocity=64,
                                     time=int(mido.second2tick(duration, PPQ, tempo))))
             track.append(mido.Message('note_off', note=int(note),
                                     time=int(mido.second2tick(silence_duration, PPQ, tempo))))
 
         
-        return pitch_values, pitch_confidence, pitch_times, track
+        return pitch_values, pitch_confidence, pitch_times, track"""
