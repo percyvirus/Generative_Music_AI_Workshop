@@ -16,16 +16,27 @@ from midi_notes_extractor import MidiNotesExtractor
 from audio_file_to_midi_file import AudioFileToMidiFile
 from changeComplexity import ChangeComplexity
 import mido
+from midiutil import MIDIFile
+from extract_note_transitions import ExtractNoteTransitions
 
 import MarkovProb as mp
 
 prints = False
 
-midi_file_path = './data/midi_files/Complex_4.mid'
-audio_file_path = "./data/audio_files/AS_escala_alba_A.wav"
+midi_file_path = './data/midi_files/Input.mid'
+audio_file_path = "./data/audio_files/Input_1.wav"
 
-input_matrix_path = "/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/Generative_Music_AI_Workshop/output.csv"
+input_matrix_path = "/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/Generative_Music_AI_Workshop/octave_probabilities.csv"
+"""
+extract_note_transitions = ExtractNoteTransitions()
 
+midi_file = '/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/data/midi_files/midi_score.mid'
+csv_file = './note_probabilities.csv'
+
+note_transitions = extract_note_transitions.extract_note_transitions(midi_file)
+transition_probabilities = extract_note_transitions.calculate_transition_probabilities(note_transitions)
+extract_note_transitions.save_probabilities_to_csv(transition_probabilities, csv_file)
+"""
 # Initialize an empty list to store the data
 list_of_lists = []
 
@@ -34,7 +45,6 @@ with open(input_matrix_path, mode='r') as file:
         # Split each line by the tab character and append it to the list_of_lists
         row = line.strip().split("\t")
         list_of_lists.append(row)
-
 
 # Initialize an empty dictionary
 note_dict = {}
@@ -48,6 +58,7 @@ for sublist in list_of_lists:
     
     # Store in the dictionary
     note_dict[note_name] = numerical_values
+
 
 # MIDI file
 midi_notes_extractor = MidiNotesExtractor()
@@ -67,16 +78,95 @@ print(f"Total original midi pitches duration (seconds): {original_midi_durations
 change_complexity = ChangeComplexity()
 
 #new_midi_durations_in_seconds, new_midi_file_onsets, new_midi_onsets_in_seconds 
-new_midi_file_pitches, new_midi_file_pitches_with_octaves, new_midi_file_durations = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
+#new_midi_file_pitches, new_midi_file_pitches_with_octaves, new_midi_file_durations = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
 #new_midi_file_pitches, new_midi_file_pitches_with_octaves, new_midi_file_durations = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
 
-print(f"New midi pitches: {new_midi_file_pitches}")
-print(f"New midi with octave pitches: {new_midi_file_pitches_with_octaves}")
-print(f"New midi with octave durations: {new_midi_file_durations}")
-print(f"Total new midi with octave pitches duration (ticks): {sum(new_midi_file_durations)}")
+onsets, new_melody_durations, octave_melodies, new_melody_pitches_midi = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
+
+"""onsets = np.array(onsets, dtype=float)
+durations = np.array(new_melody_durations, dtype=float)
+notes = np.array(new_melody_pitches_midi, dtype=float)"""
+
+
+durations = new_melody_durations
+notes = new_melody_pitches_midi
+
+print(f"New midi onsets: {onsets}")
+print(f"New midi durations: {new_melody_durations}")
+print(f"New midi pitches: {new_melody_pitches_midi}")
+#print(f"Total new midi with octave pitches duration (ticks): {sum(new_midi_file_durations)}")
 #print(f"Total original midi pitches duration (seconds): {sum(midi_durations_in_seconds)}")
 
-# Save the results to a CSV file
+PPQ = 96
+BPM = 90
+
+onsets = [sec * BPM / 60 for sec in onsets]
+durations = [sec * BPM / 60 for sec in durations]
+
+# Create a MIDIFile object with one track
+midi = MIDIFile(1)
+track = 0
+time = 0  # Start at the beginning
+midi.addTrackName(track, time, "Track")
+midi.addTempo(track, time, BPM)  # Set tempo to 120 BPM
+
+for pitches, onset, duration in zip(notes, onsets, durations):
+    if isinstance(pitches, list):
+        # Si es un acorde (lista de tonos)
+        for pitch in pitches:
+            midi.addNote(track, channel=0, pitch=pitch, time=onset, duration=duration, volume=100)
+    else:
+        # Si es una sola nota
+        midi.addNote(track, channel=0, pitch=pitches, time=onset, duration=duration, volume=100)
+
+"""
+melody = []
+for idx in range(len(notes)):
+    melody.append((notes[idx], onsets[idx], durations[idx]))
+
+# Add notes and chords to the MIDI file
+for item in melody:
+    pitches, onset, duration = item
+    if isinstance(pitches, list):
+        # If it's a chord (list of pitches)
+        for pitch in pitches:
+            midi.addNote(track, channel=0, pitch=pitch, time=onset, duration=duration, volume=100)
+    else:
+        # If it's a single note
+        midi.addNote(track, channel=0, pitch=pitches, time=onset, duration=duration, volume=100)
+"""
+# Write the MIDI file to disk
+with open('./extracted_melody_PERCY.mid', 'wb') as output_file:
+    midi.writeFile(output_file)
+    
+"""ticks_per_beat = 480  # Ejemplo: 480 ticks por beat
+tempo_bpm = 120       # Ejemplo: 120 beats por minuto
+
+PPQ = 500 # Pulses per quarter note.
+BPM = 120 # Assuming a default tempo in Ableton to build a MIDI clip.
+tempo = mido.bpm2tempo(BPM) # Microseconds per beat.
+
+# Compute onsets and offsets for all MIDI notes in ticks.
+# Relative tick positions start from time 0.
+offsets = onsets + durations
+silence_durations = list(onsets[1:] - offsets[:-1]) + [0]
+
+mid = mido.MidiFile()
+track = mido.MidiTrack()
+mid.tracks.append(track)
+
+for note, onset, duration, silence_duration in zip(list(notes), list(onsets), list(durations), silence_durations):
+    track.append(mido.Message('note_on', note=int(note), velocity=64,
+                              time=int(mido.second2tick(duration, PPQ, tempo))))
+    track.append(mido.Message('note_off', note=int(note),
+                              time=int(mido.second2tick(silence_duration, PPQ, tempo))))
+
+midi_file = './extracted_melody_PERCY.mid'
+mid.save(midi_file)
+print("MIDI file location:", midi_file)"""
+
+
+"""# Save the results to a CSV file
 output_file_path = "midi_notes.csv"
 with open(output_file_path, mode='w', newline='') as file:
     writer = csv.writer(file)
@@ -128,27 +218,28 @@ audio_file_bpm, audio_file_beats, audio_file_beats_confidence, _, audio_file_bea
 # · histogram (vector_real) - bpm histogram [bpm]
 
 peak1_bpm, peak1_weight, peak1_spread, peak2_bpm, peak2_weight, peak2_spread, audio_file_histogram_bpm = \
-    estd.BpmHistogramDescriptors()(audio_file_beats_intervals)
+    estd.BpmHistogramDescriptors()(audio_file_beats_intervals)"""
 
 """print("Overall BPM (estimated before): %0.1f" % audio_file_bpm)
 print("First histogram peak: %0.1f bpm" % peak1_bpm)
 print("Second histogram peak: %0.1f bpm" % peak2_bpm)"""
 
-audio_file_bpm_entropy = entropy(audio_file_histogram_bpm)
+"""audio_file_bpm_entropy = entropy(audio_file_histogram_bpm)
 
-print(f"Audio file BPM entropy: {audio_file_bpm_entropy}")
+print(f"Audio file BPM entropy: {audio_file_bpm_entropy}")"""
 
 """resample_quality = 0
 num_bins = 12
 min_frequency = 50
 max_frequency = 5000"""
 
-hpcp = HPCP()
+"""hpcp = HPCP()
 audio_file_hpcp = hpcp.extract_HPCPs(audio_file_audio, audio_file_features)
 
 audio_file_to_midi_file = AudioFileToMidiFile()
 audio_file_pitch_values, audio_file_pitch_confidence, audio_file_pitch_times, audio_file_midi_track = audio_file_to_midi_file.execute(audio_file_path, audio_file_features)
 
+"""
 """audio_file_pitch_melody = AudioPitchMelody()
 audio_file_pitch_values, audio_file_pitch_confidence, audio_file_pitch_times, audio_file_hop_size, audio = audio_file_pitch_melody.extract_audio_pitch_melody(audio_file_path, audio_file_features)
 
@@ -156,7 +247,8 @@ pitch_MIDI = Note_segmentation_and_converting_to_MIDI()
 onsets, durations, notes = pitch_MIDI.extract_pitch_MIDI(audio_file_pitch_values, audio_file_audio, audio)
 
 pitch_to_MIDI = Pitch_to_MIDI()
-pitch_to_MIDI.save_pitch_to_MIDI(audio_file_path, onsets, durations, notes)
+pitch_to_MIDI.save_pitch_to_MIDI(audio_file_path, onsets, durations, notes)"""
+
 """
 # Filter pitch_values where pitch_confidence is not 0
 filtered_pitch_values = audio_file_pitch_values[audio_file_pitch_confidence > 0]
@@ -181,7 +273,7 @@ note_durations = np.diff(filtered_pitch_times)
 print(f"Pitch Entropy: {pitch_entropy}")
 
 #onsets, durations, notes = estd.PitchContourSegmentation(hopSize=128)(audio_file_pitch_values, audio)
-
+"""
 
 """def create_transition_matrix(notes, note_range=(0, 127)):
     num_notes = note_range[1] - note_range[0] + 1
@@ -198,7 +290,7 @@ print(f"Pitch Entropy: {pitch_entropy}")
     
     return transition_matrix"""
 
-# Plot
+"""# Plot
 note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 # Convert the durations to cumulative time
@@ -245,7 +337,7 @@ octave_note_names = ['C3', 'C#3', 'D3', 'D#3', 'E3', 'F3', 'F#3', 'G3', 'G#3', '
                      'C4', 'C#4', 'D4', 'D#4', 'E4', 'F4', 'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4',
                      'C5', 'C#5', 'D5', 'D#5', 'E5', 'F5', 'F#5', 'G5', 'G#5', 'A5', 'A#5', 'B5',
                      'C6', 'C#6', 'D6', 'D#6', 'E6', 'F6', 'F#6', 'G6', 'G#6', 'A6', 'A#6', 'B6']
-
+"""
 if prints:
     # Scatter plot of entropy values vs time
     plt.figure(figsize=(10, 6))
@@ -359,4 +451,3 @@ if prints:
     #complexity = estd.MusicExtractor(file_path)
 
     #print(complexity)
-    

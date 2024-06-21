@@ -1,7 +1,7 @@
 import numpy as np
 import random
 import MarkovProb as mp
-from music21 import converter
+from music21 import converter, pitch
 import csv
 
 class ChangeComplexity():
@@ -18,6 +18,9 @@ class ChangeComplexity():
         new_melody_line_no_pitches = self.insert_notes(added_index, new_melody_length)
         new_melody_line_no_new_pitches = self.create_new_melody_line(new_melody_line_no_pitches, midi_file_pitches)
         new_melody_pitches = self.generate_new_state(new_melody_line_no_new_pitches, pitch_class_prob_dic, pitch_class)
+        
+        
+        new_melody_pitches_midi = self.pitch_to_midi_note(new_melody_pitches)
         
         new_melody_line_no_duration = self.insert_notes(added_index, new_melody_length)
         new_melody_line_no_new_durations = self.create_new_melody_line(new_melody_line_no_duration, midi_file_durations)
@@ -39,13 +42,21 @@ class ChangeComplexity():
         print(new_melody_line_no_new_onsets)
         new_melody_onsets = self.generate_onsets(added_index, new_melody_line_no_new_onsets)
         """
-        octave_melodies = self.generate_octave(note_dict, new_melody_pitches)
+        octave_melodies = self.generate_octave(note_dict, new_melody_pitches, added_index)
         
-        print(f"Onsets: {onsets}")
+        """print(f"Onsets: {onsets}")
         print(f"Durations: {new_melody_durations}")
-        print(f"Pitches: {octave_melodies}")
+        print(f"Pitches: {octave_melodies}")"""
         
-        return new_melody_pitches, octave_melodies, new_melody_durations
+        ticks_per_beat = 480
+        tempo_bpm = 120 
+        
+        onsets = self.convert_ticks_to_seconds(onsets, ticks_per_beat, tempo_bpm)
+        new_melody_durations = self.convert_ticks_to_seconds(new_melody_durations, ticks_per_beat, tempo_bpm)
+
+        
+        #return new_melody_pitches, octave_melodies, new_melody_durations
+        return onsets, new_melody_durations, octave_melodies, new_melody_pitches_midi
     
     def execute_bis(self, midi_file_pitches, midi_file_durations, midi_file_onsets, note_dict):
         added_index, new_melody_length = self.add_index(5, midi_file_pitches)
@@ -59,6 +70,7 @@ class ChangeComplexity():
         durations_new_melody_line = self.create_new_melody_line(durations_new_melody_line_no_duration, midi_file_durations)
         durations_new_melody = self.generate_durations_bis(added_index, durations_new_melody_line, midi_file_onsets)
         octave_melodies = self.generate_octave(note_dict, new_melody)
+        new_midi = self.pitch_to_midi_note(new_melody_with_octave   )
         
         return new_melody, octave_melodies, durations_new_melody
     
@@ -144,13 +156,52 @@ class ChangeComplexity():
             pitch_class_prob_dic[pitch_class] = transition_matrix[row]
         return keys, pitch_class_prob_dic
 
-    def generate_new_state(self, melody_line, pitch_class_prob_dic, pitches_class):
+    """def generate_new_state(self, melody_line, pitch_class_prob_dic, pitches_class):
         melody = melody_line.copy()
         for idx, note in enumerate(melody): 
             if note == 1: 
                 prev_state = melody[idx-1]
                 probabilities = pitch_class_prob_dic[prev_state]
                 melody[idx] = random.choices(pitches_class, probabilities)[0]
+        return melody"""
+    
+    def generate_new_state(self, melody, pitch_class_prob_dic, pitch_classes): # CHANGED
+        for idx, note in enumerate(melody): 
+            if note == 1: 
+                prev_state = melody[idx-1]
+                # print(prev_state)
+                # Check if the previous state is a note or a chord
+                if isinstance(prev_state,str): 
+                    if len(prev_state)==1: 
+                        probabilities = pitch_class_prob_dic[prev_state]
+                    elif prev_state[1]=='#' and len(prev_state)==2: 
+                        probabilities = pitch_class_prob_dic[prev_state]
+                    elif prev_state[1]!='#' and len(prev_state)==2: 
+                        probabilities = pitch_class_prob_dic[prev_state[:-1]]
+                    elif len(prev_state)>2: 
+                        probabilities = pitch_class_prob_dic[prev_state[:-1]]
+                else: 
+                    # Choose the root note of the chord and get corresponding transition probability
+                    previous_state = prev_state[0]
+                    if len(previous_state)==1: 
+                        probabilities = pitch_class_prob_dic[previous_state]
+                    elif previous_state[1]=='#' and len(previous_state)==2: 
+                        probabilities = pitch_class_prob_dic[previous_state]
+                    elif previous_state[1]!='#' and len(previous_state)==2: 
+                        probabilities = pitch_class_prob_dic[previous_state[:-1]]
+                    elif len(previous_state)>2: 
+                        probabilities = pitch_class_prob_dic[previous_state[:-1]]
+                new_pitch = random.choices(pitch_classes, probabilities)[0]
+
+                # Randomly generate a note or a chord
+                if random.choice([True, False]): 
+                    melody[idx] = new_pitch
+                else: 
+                    num_notes = random.randint(2, 5)
+                    pitches = [new_pitch]
+                    while len(pitches)<num_notes: 
+                        pitches.append(random.choice(pitch_classes))
+                    melody[idx] = pitches
         return melody
 
     def generate_onsets(self, idx_list, melody_line_no_new_onsets):
@@ -175,6 +226,28 @@ class ChangeComplexity():
             onsets_new_melody_line[idx] = current_onset
         
         return onsets_new_melody_line
+    
+    def pitch_to_midi_note(self, melody): # ADDED
+        midi_element = []
+        for element in melody: 
+            if isinstance(element, list): 
+                midi_chord_note = []
+                for chord_note in element: 
+                    midi_chord_note.append(pitch.Pitch(chord_note).midi)
+                midi_element.append(midi_chord_note)
+            else: 
+                midi_element.append(pitch.Pitch(element).midi)
+        return midi_element
+    
+    
+    def convert_ticks_to_seconds(self, ticks_list, ticks_per_beat, tempo_bpm):
+        # Calcula el número de segundos por beat
+        seconds_per_beat = 60 / tempo_bpm
+        # Calcula el número de segundos por tick
+        seconds_per_tick = seconds_per_beat / ticks_per_beat
+        # Convierte la lista de ticks a segundos
+        return [tick * seconds_per_tick for tick in ticks_list]
+
     """
 
         pitch_class = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -264,13 +337,36 @@ class ChangeComplexity():
             durations_new_melody_line[idx+1] = round(next_duration/total_duration_added*total_duration)
         return durations_new_melody_line
 
-    def generate_octave(self, octave_prob_dic, melody):
-        octave = ['3','4','5','6']
-        melody_with_octave = []
-        for idx, note in enumerate(melody):
-            probabilities = octave_prob_dic[note]
-            melody_with_octave.append(note + random.choices(octave, probabilities)[0])
-        return melody_with_octave 
+    """def generate_octave(self, octave_prob_dic, melody, added_index): 
+        octaves = ['3','4','5','6']
+        for idx in added_index: 
+            note = melody[idx]
+            if isinstance(note, str):
+                probabilities = octave_prob_dic[note]
+                melody[idx] = note + random.choices(octaves, probabilities)[0]
+            else:
+                probabilities = octave_prob_dic[note[0]]
+                root_note = note[0]+random.choices(octaves, probabilities)[0]
+                # for note_i in note: 
+                #     probabilities = octave_prob_dic[note_i]
+                #     chord.append(note_i+random.choices(octaves, probabilities)[0])
+                chord = self.generate_harmonic_chord(root_note)
+                melody[idx] = chord
+        return melody"""
+    def generate_octave(self, octave_prob_dic, melody, added_index): # CHANGED
+        octaves = ['3','4','5','6']
+        for idx in added_index: 
+            note = melody[idx]
+            if isinstance(note, str):
+                probabilities = octave_prob_dic[note]
+                melody[idx] = note + random.choices(octaves, probabilities)[0]
+            else: 
+                chord = []
+                for note_i in note: 
+                    probabilities = octave_prob_dic[note_i]
+                    chord.append(note_i+random.choices(octaves, probabilities)[0])
+                melody[idx] = chord
+        return melody
 
 
 """melody_path = '/Users/wendy/Documents/GenAI/Nexity/dataset/Complex_4.mid'
