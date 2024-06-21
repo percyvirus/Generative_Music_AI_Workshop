@@ -23,20 +23,21 @@ import MarkovProb as mp
 
 prints = False
 
-midi_file_path = './data/midi_files/Input.mid'
+midi_file_path = './data/midi_files/adele-someone_like_you.mid'
 audio_file_path = "./data/audio_files/Input_1.wav"
 
-input_matrix_path = "/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/Generative_Music_AI_Workshop/octave_probabilities.csv"
-"""
-extract_note_transitions = ExtractNoteTransitions()
+#input_matrix_path = "/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/Generative_Music_AI_Workshop/octave_probabilities.csv"
+input_matrix_path = "/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/note_probabilities.csv"
 
 midi_file = '/Users/percywbm/Desktop/PERCY/Generative Music AI Workshop/generativemusicaicourse/data/midi_files/midi_score.mid'
 csv_file = './note_probabilities.csv'
 
+extract_note_transitions = ExtractNoteTransitions()
+
 note_transitions = extract_note_transitions.extract_note_transitions(midi_file)
 transition_probabilities = extract_note_transitions.calculate_transition_probabilities(note_transitions)
-extract_note_transitions.save_probabilities_to_csv(transition_probabilities, csv_file)
-"""
+#extract_note_transitions.save_probabilities_to_csv(transition_probabilities, csv_file)
+
 # Initialize an empty list to store the data
 list_of_lists = []
 
@@ -64,44 +65,40 @@ for sublist in list_of_lists:
 midi_notes_extractor = MidiNotesExtractor()
 # (Midi note, duration in ticks, duration in seconds)
 #original_midi_file_pitches, original_midi_file_durations, original_midi_durations_in_seconds, original_midi_file_onsets, original_midi_onsets_in_seconds = midi_notes_extractor.extract_midi_notes(midi_file_path, channel=0)
-original_midi_file_onsets, original_midi_file_durations, original_midi_file_pitches, original_midi_onsets_in_seconds, original_midi_durations_in_seconds, original_midi_file_note_names = midi_notes_extractor.extract_midi_notes(midi_file_path, channel=0)
-original_time_midi_file_pitches = np.cumsum(original_midi_file_durations)
-
-print(f"Original midi pitches: {original_midi_file_note_names}")
-print(f"Original midi onsets: {original_midi_file_onsets}")
-print(f"Original midi cumsum durations: {original_time_midi_file_pitches}")
-print(f"Original midi durations: {original_midi_file_durations}")
-print(f"Total original midi pitches duration (ticks): {sum(original_midi_file_durations)}")
-print(f"Total original midi pitches duration (seconds): {sum(original_midi_durations_in_seconds)}")
-print(f"Total original midi pitches duration (seconds): {original_midi_durations_in_seconds}")
+original_pitches, original_onsets, original_durations = midi_notes_extractor.extract_midi_notes(midi_file_path, channel=0)
+# original_midi_file_onsets, original_midi_file_durations, original_midi_file_pitches, original_midi_onsets_in_seconds, original_midi_durations_in_seconds, original_midi_file_note_names = midi_notes_extractor.extract_midi_notes(midi_file_path, channel=0)
+#original_time_midi_file_pitches = np.cumsum(original_midi_file_durations)
 
 change_complexity = ChangeComplexity()
 
+original_pitches_midi_notes = change_complexity.pitch_to_midi_note(original_pitches)
+
+print(f"Original midi pitches: {original_pitches}")
 #new_midi_durations_in_seconds, new_midi_file_onsets, new_midi_onsets_in_seconds 
 #new_midi_file_pitches, new_midi_file_pitches_with_octaves, new_midi_file_durations = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
 #new_midi_file_pitches, new_midi_file_pitches_with_octaves, new_midi_file_durations = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
 
-onsets, new_melody_durations, octave_melodies, new_melody_pitches_midi = change_complexity.execute(original_midi_file_note_names, original_midi_file_durations, original_midi_file_onsets, note_dict)
-
+#onsets, new_melody_durations, octave_melodies, new_melody_pitches_midi = change_complexity.execute(original_pitches_midi_notes, original_durations, original_onsets, note_dict, note_dict)
+onsets, new_melody_durations, new_melody_pitches = change_complexity.execute(original_pitches_midi_notes, original_durations, original_onsets, note_dict, note_dict)
 """onsets = np.array(onsets, dtype=float)
 durations = np.array(new_melody_durations, dtype=float)
 notes = np.array(new_melody_pitches_midi, dtype=float)"""
 
 
 durations = new_melody_durations
-notes = new_melody_pitches_midi
+notes = new_melody_pitches
 
 print(f"New midi onsets: {onsets}")
 print(f"New midi durations: {new_melody_durations}")
-print(f"New midi pitches: {new_melody_pitches_midi}")
+print(f"New midi pitches: {new_melody_pitches}")
 #print(f"Total new midi with octave pitches duration (ticks): {sum(new_midi_file_durations)}")
 #print(f"Total original midi pitches duration (seconds): {sum(midi_durations_in_seconds)}")
 
 PPQ = 96
-BPM = 90
+BPM = 150
 
-onsets = [sec * BPM / 60 for sec in onsets]
-durations = [sec * BPM / 60 for sec in durations]
+#onsets = [sec * BPM / 60 for sec in onsets]
+#durations = [sec * BPM / 60 for sec in durations]
 
 # Create a MIDIFile object with one track
 midi = MIDIFile(1)
@@ -110,6 +107,32 @@ time = 0  # Start at the beginning
 midi.addTrackName(track, time, "Track")
 midi.addTempo(track, time, BPM)  # Set tempo to 120 BPM
 
+melody = []
+for idx in range(len(notes)):
+    melody.append((notes[idx], onsets[idx], durations[idx]))
+
+# Ensure onsets and durations are valid floats
+onsets = [float(onset) for onset in onsets]
+durations = [float(duration) for duration in durations]
+
+# Add notes and chords to the MIDI file
+for item in melody:
+    pitches, onset, duration = item
+    if isinstance(pitches, list):
+        # If it's a chord (list of pitches)
+        for pitch in pitches:
+            if 0 <= pitch <= 127:
+                midi.addNote(track, channel=0, pitch=int(pitch), time=onset, duration=duration, volume=100)
+            else:
+                print(f"Invalid pitch value: {pitch}")
+    else:
+        # If it's a single note
+        if 0 <= pitches <= 127:
+            midi.addNote(track, channel=0, pitch=int(pitches), time=onset, duration=duration, volume=100)
+        else:
+            print(f"Invalid pitch value: {pitches}")
+
+"""
 for pitches, onset, duration in zip(notes, onsets, durations):
     if isinstance(pitches, list):
         # Si es un acorde (lista de tonos)
@@ -118,7 +141,7 @@ for pitches, onset, duration in zip(notes, onsets, durations):
     else:
         # Si es una sola nota
         midi.addNote(track, channel=0, pitch=pitches, time=onset, duration=duration, volume=100)
-
+"""
 """
 melody = []
 for idx in range(len(notes)):

@@ -1,12 +1,48 @@
 import mido
 import numpy as np
+from music21 import converter, pitch
 
 class MidiNotesExtractor:
     def __init__(self):
         pass
     
+    def change_note(self, element): # ADDED
+        change_dic = {'C-':'B', 'D-':'C#', 'E-':'D#', 'F-':'E', 'G-':'F#', 'A-':'G#', 'B-':'A#'}
+        if element in change_dic: 
+            element = change_dic[element]
+        return element
+    
     def extract_midi_notes(self, midi_file_path, channel=0):
-        self.midi_file = mido.MidiFile(midi_file_path, clip=True)
+        """Get the input melody and change it into pitch notation"""
+        
+        midi_data = converter.parse(midi_file_path)
+        melody = []
+        onsets = []
+        durations = []
+        
+        for element in midi_data.flat.notes: 
+            onset = element.offset
+            duration = element.quarterLength
+            
+            if element.isNote: 
+                pitch_with_octave = self.change_note(element.pitch.nameWithOctave)
+                melody.append(pitch_with_octave)
+                onsets.append(onset)
+                durations.append(duration)
+        
+                # melody_pitch_no_octave.append(pitch_no_octave)
+            elif element.isChord: 
+                chord_pitches_with_octave = [self.change_note(pitch.nameWithOctave) for pitch in element.pitches]
+                melody.append(chord_pitches_with_octave)
+                onsets.append(onset)
+                durations.append(duration)
+                
+        return melody, onsets, durations
+        
+        
+        
+        
+        """self.midi_file = mido.MidiFile(midi_file_path, clip=True)
         pitches = []
         durations = []
         onsets = []
@@ -44,7 +80,7 @@ class MidiNotesExtractor:
         note_names = [self.midi_note_to_name(pitch) for pitch in pitches]
         
         return onsets, durations, pitches, onsets_in_seconds, durations_in_seconds, note_names
-
+"""
     @staticmethod
     def midi_note_to_name(midi_note):
         note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']

@@ -36,12 +36,20 @@ class ExtractNoteTransitions():
         return probabilities
 
     def save_probabilities_to_csv(self, probabilities, csv_file):
-        all_notes = sorted(set(probabilities.keys()).union({n for nexts in probabilities.values() for n in nexts.keys()}))
+        all_notes = list(range(128))  # Incluir todas las notas MIDI posibles (0-127)
 
+        # Crear DataFrame con todas las notas posibles
         df = pd.DataFrame(index=all_notes, columns=all_notes).fillna(0.0)
 
+        # Asignar probabilidades calculadas a la matriz
         for note, next_notes in probabilities.items():
             for next_note, prob in next_notes.items():
                 df.at[note, next_note] = prob
 
-        df.to_csv(csv_file)
+        # Asignar probabilidad de 1 a la transición de una nota a sí misma si no aparece
+        for note in all_notes:
+            if note not in probabilities:
+                df.at[note, note] = 1.0
+
+        # Guardar el DataFrame en un archivo CSV
+        df.to_csv(csv_file, float_format='%.8f')
